@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// prisma/schema.prisma
+datasource db {
+  provider  = "postgresql"
+  url  	    = env("DATABASE_URL")
+  // uncomment next line if you use Prisma <5.10
+  // directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  password    String
+  role        Role     @default(USER)
+  phone       String?  // For SMS-based MFA
+  mfaEnabled  Boolean  @default(false)
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assets      Asset[]
+  sentTransactions     Transaction[] @relation("SentTransactions")
+  receivedTransactions Transaction[] @relation("ReceivedTransactions")
+  investments Investment[]
+  loans       Loan[]
+  securityLogs SecurityLog[] // Opposite relation for SecurityLog
+  mfaTokens   MFAToken[]     // Opposite relation for MFAToken
+}
+
+model Asset {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // e.g., "BTC", "ETH", "USD"
+  balance     Float    @default(0.0)
+  currency    String   @default("USD")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Transaction {
+  id          Int               @id @default(autoincrement())
+  senderId    Int
+  sender      User              @relation("SentTransactions", fields: [senderId], references: [id])
+  receiverId  Int
+  receiver    User              @relation("ReceivedTransactions", fields: [receiverId], references: [id])
+  amount      Float
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+enum InvestmentType {
+  STOCKS
+  BONDS
+  CRYPTO
+}
+
+model Investment {
+  id          Int             @id @default(autoincrement())
+  userId      Int
+  user        User            @relation(fields: [userId], references: [id])
+  amount      Float
+  type        InvestmentType
+  status      String          @default("ACTIVE") // "ACTIVE", "CLOSED"
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REPAID
+}
+
+model Loan {
+  id          Int         @id @default(autoincrement())
+  userId      Int
+  user        User        @relation(fields: [userId], references: [id])
+  amount      Float
+  interest    Float       @default(5.0) // Annual interest rate
+  status      LoanStatus  @default(PENDING)
+  dueDate     DateTime
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model SecurityLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String   // e.g., "LOGIN", "PASSWORD_CHANGE"
+  ipAddress   String?
+  timestamp   DateTime @default(now())
+}
+
+model MFAToken {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  token       String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
