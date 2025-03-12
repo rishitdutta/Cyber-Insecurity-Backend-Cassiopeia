@@ -23,12 +23,22 @@ enum Role {
 
 model User {
   id          Int      @id @default(autoincrement())
+  name        String?  
   email       String   @unique
   password    String
   role        Role     @default(USER)
-  phone       String?  // For SMS-based MFA
+  phone       String?
   mfaEnabled  Boolean  @default(false)
+  mfaSecret   String?  // Add this line
+  otp         String?
+  otpExpiry   DateTime?
   isVerified  Boolean  @default(false)
+  profileCompleted    Boolean     @default(false)
+  failedLoginAttempts Int         @default(0)
+  loginAttempts       Int         @default(0)
+  lastLoginAt         DateTime?
+  passwordResetRequested Boolean  @default(false)
+  passwordChangedAt   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   assets      Asset[]
@@ -36,8 +46,8 @@ model User {
   receivedTransactions Transaction[] @relation("ReceivedTransactions")
   investments Investment[]
   loans       Loan[]
-  securityLogs SecurityLog[] // Opposite relation for SecurityLog
-  mfaTokens   MFAToken[]     // Opposite relation for MFAToken
+  securityLogs SecurityLog[]
+  mfaTokens   MFAToken[]
 }
 
 model Asset {
@@ -112,12 +122,17 @@ model Loan {
 }
 
 model SecurityLog {
-  id          Int      @id @default(autoincrement())
+  id          String    @id @default(uuid())
   userId      Int?
-  user        User?    @relation(fields: [userId], references: [id])
-  action      String   // e.g., "LOGIN", "PASSWORD_CHANGE"
-  ipAddress   String?
-  timestamp   DateTime @default(now())
+  user        User?     @relation(fields: [userId], references: [id])
+  eventType   String?    // e.g., "ACCOUNT_VERIFICATION", "FAILED_LOGIN_ATTEMPT"
+  details     String?   // JSON string with additional event information
+  timestamp   DateTime  @default(now())
+  action      String    // Add this field
+  
+  @@index([userId])
+  @@index([eventType])
+  @@index([timestamp])
 }
 
 model MFAToken {

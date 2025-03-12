@@ -1,29 +1,22 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// Create a new user
-const createUser = async (req, res) => {
-  const { email, password } = req.body;
+// Get all users (Admin only)
+exports.getAllUsers = async (req, res) => {
   try {
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password, // Note: Hash the password in a real app!
-      },
-    });
-    res.json(user);
+    const users = await prisma.user.findMany();
+    res.json(users);
   } catch (error) {
-    res.status(400).json({ error: 'User creation failed' });
+    res.status(500).json({ error: "Failed to fetch users" });
   }
 };
 
-// Get all users
-const getAllUsers = async (req, res) => {
-  const users = await prisma.user.findMany();
-  res.json(users);
-};
-
-module.exports = {
-  createUser,
-  getAllUsers,
+// Get user profile
+exports.getProfile = async (req, res) => {
+  const userId = req.user.id;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, isVerified: true },
+  });
+  res.json(user);
 };
