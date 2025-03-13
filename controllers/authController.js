@@ -49,8 +49,14 @@ exports.initiateSignup = async (req, res) => {
       }
     });
     
-    // Log the signup attempt
-    logSecurityEvent(null, "SIGNUP_INITIATED", { email });
+    // Updated security logging
+    await logSecurityEvent(
+      null, 
+      "SIGNUP_INITIATED", 
+      { email }, 
+      req.ip, 
+      req.headers['user-agent']
+    );
     res.status(201).json({ message: "OTP sent to email" });
   } catch (error) {
     console.error('Signup error:', error);
@@ -72,7 +78,13 @@ exports.verifySignup = async (req, res) => {
     // Compare hashed OTP
     const isValidOTP = await comparePassword(otp, user.otp);
     if (!isValidOTP) {
-      logSecurityEvent(user.id, "FAILED_OTP_VERIFICATION");
+      await logSecurityEvent(
+        user.id,
+        "FAILED_OTP_VERIFICATION",
+        { email },
+        req.ip,
+        req.headers['user-agent']
+      );
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
@@ -83,7 +95,13 @@ exports.verifySignup = async (req, res) => {
     
     // Generate token with expiry
     const token = generateToken(user.id, '24h');
-    logSecurityEvent(user.id, "ACCOUNT_VERIFICATION");
+    await logSecurityEvent(
+      user.id,
+      "ACCOUNT_VERIFICATION",
+      { method: "EMAIL" },
+      req.ip,
+      req.headers['user-agent']
+    );
     res.json({ token, message: "Account verified" });
   } catch (error) {
     console.error('Verification error:', error);
@@ -135,7 +153,16 @@ exports.initiateLogin = async (req, res) => {
    
     const isValid = await comparePassword(password, user.password);
     if (!isValid) {
-      logSecurityEvent(user.id, "FAILED_LOGIN_ATTEMPT", { email });
+      await logSecurityEvent(
+        user.id,
+        "FAILED_LOGIN_ATTEMPT",
+        { 
+          email,
+          attemptCount: user.failedLoginAttempts + 1
+        },
+        req.ip,
+        req.headers['user-agent']
+      );
       return res.status(401).json({ error: "Invalid credentials" });
     }
     
@@ -153,7 +180,13 @@ exports.initiateLogin = async (req, res) => {
       }
     });
     
-    logSecurityEvent(user.id, "LOGIN_OTP_SENT");
+    await logSecurityEvent(
+      user.id,
+      "LOGIN_OTP_SENT",
+      { method: "EMAIL" },
+      req.ip,
+      req.headers['user-agent']
+    );
     res.status(200).json({ 
       message: "OTP sent to your email for verification",
       userId: user.id // Send userId for the next step
@@ -179,14 +212,16 @@ exports.verifyLogin = async (req, res) => {
     // Compare hashed OTP
     const isValidOTP = await comparePassword(otp, user.otp);
     if (!isValidOTP) {
-      logSecurityEvent(user.id, "FAILED_LOGIN_OTP");
-      
-      // Increment failed attempts
-      await prisma.user.update({
-        where: { id: userId },
-        data: { failedLoginAttempts: { increment: 1 } }
-      });
-      
+      await logSecurityEvent(
+        user.id,
+        "FAILED_LOGIN_OTP",
+        { 
+          userId: user.id,
+          attemptCount: user.failedLoginAttempts + 1
+        },
+        req.ip,
+        req.headers['user-agent']
+      );
       return res.status(400).json({ error: "Invalid OTP" });
     }
     
@@ -204,7 +239,17 @@ exports.verifyLogin = async (req, res) => {
     // Generate auth token with expiry
     const token = generateToken(user.id, '24h');
     
-    logSecurityEvent(user.id, "SUCCESSFUL_LOGIN");
+    await logSecurityEvent(
+      user.id,
+      "SUCCESSFUL_LOGIN",
+      { 
+        method: "EMAIL",
+        lastLogin: new Date()
+      },
+      req.ip,
+      req.headers['user-agent']
+    );
+    
     res.json({ 
       token, 
       user: { 

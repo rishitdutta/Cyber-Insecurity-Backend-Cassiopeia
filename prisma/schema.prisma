@@ -33,6 +33,9 @@ model User {
   otp         String?
   otpExpiry   DateTime?
   isVerified  Boolean  @default(false)
+  address      String?
+  dateOfBirth  DateTime?
+  lastIp       String?
   profileCompleted    Boolean     @default(false)
   failedLoginAttempts Int         @default(0)
   loginAttempts       Int         @default(0)
@@ -121,18 +124,31 @@ model Loan {
   updatedAt   DateTime    @updatedAt
 }
 
+enum SecurityEventType {
+  ACCOUNT_VERIFICATION
+  FAILED_LOGIN_ATTEMPT
+  PASSWORD_RESET
+  MFA_ENABLED
+  SUSPICIOUS_ACTIVITY
+  PROFILE_UPDATE
+  ASSET_TRANSFER
+  LOAN_APPLICATION
+}
+
+// Update SecurityLog model
 model SecurityLog {
   id          String    @id @default(uuid())
-  userId      Int?
-  user        User?     @relation(fields: [userId], references: [id])
-  eventType   String?    // e.g., "ACCOUNT_VERIFICATION", "FAILED_LOGIN_ATTEMPT"
-  details     String?   // JSON string with additional event information
-  timestamp   DateTime  @default(now())
-  action      String    // Add this field
-  
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+  eventType   SecurityEventType
+  ipAddress   String?
+  userAgent   String?
+  details     Json?     // Changed to Json type for structured data
+  createdAt   DateTime  @default(now())
+
   @@index([userId])
   @@index([eventType])
-  @@index([timestamp])
+  @@index([createdAt])
 }
 
 model MFAToken {

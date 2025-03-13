@@ -1,38 +1,67 @@
-const { verifyToken } = require('../utils/auth');
-const { logSecurityEvent } = require('../utils/securityLogger');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-
 const authenticate = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: "Authentication required" });
+  if (!token) {
+    await logSecurityEvent(
+      null,
+      "UNAUTHENTICATED_ACCESS",
+      { path: req.path },
+      req.ip,
+      req.headers['user-agent']
+    );
+    return res.status(401).json({ error: "Authentication required" });
+  }
 
   try {
     const decoded = verifyToken(token);
     
-    // Check if token has expired
     if (decoded.exp <= Date.now() / 1000) {
+      await logSecurityEvent(
+        decoded.userId,
+        "EXPIRED_TOKEN_ATTEMPT",
+        { token },
+        req.ip,
+        req.headers['user-agent']
+      );
       return res.status(401).json({ error: "Token has expired" });
     }
     
-    // Check if user exists and is still active
     const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
     
     if (!user || !user.isVerified) {
+      await logSecurityEvent(
+        decoded.userId,
+        "INVALID_USER_ACCESS",
+        { userId: decoded.userId },
+        req.ip,
+        req.headers['user-agent']
+      );
       return res.status(401).json({ error: "User not found or not verified" });
     }
     
-    // Check if password was changed after token was issued
     if (user.passwordChangedAt && user.passwordChangedAt > new Date(decoded.iat * 1000)) {
+      await logSecurityEvent(
+        user.id,
+        "STALE_TOKEN_ATTEMPT",
+        { lastPasswordChange: user.passwordChangedAt },
+        req.ip,
+        req.headers['user-agent']
+      );
       return res.status(401).json({ error: "Password has been changed, please login again" });
     }
     
-    // Add user data to request
     req.user = { id: decoded.userId };
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
-    logSecurityEvent(null, "INVALID_TOKEN_ATTEMPT", { ip: req.ip });
+    await logSecurityEvent(
+      null,
+      "INVALID_TOKEN_ATTEMPT",
+      { 
+        error: error.message,
+        token: token.slice(0, 10) + '...' // Log partial token for security
+      },
+      req.ip,
+      req.headers['user-agent']
+    );
     res.status(401).json({ error: "Invalid token" });
   }
 };
