@@ -133,6 +133,7 @@ enum SecurityEventType {
   PROFILE_UPDATE
   ASSET_TRANSFER
   LOAN_APPLICATION
+  NULL
 }
 
 // Update SecurityLog model
@@ -140,7 +141,7 @@ model SecurityLog {
   id          String    @id @default(uuid())
   userId      Int
   user        User      @relation(fields: [userId], references: [id])
-  eventType   SecurityEventType
+  eventType   SecurityEventType  @default(NULL)
   ipAddress   String?
   userAgent   String?
   details     Json?     // Changed to Json type for structured data
