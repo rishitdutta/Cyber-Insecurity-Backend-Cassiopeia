@@ -1,11 +1,30 @@
+// transactionRoutes.js
 const express = require('express');
 const router = express.Router();
-const transactionController = require('../controllers/transactionController');
-const authenticateUser = require('../middleware/authMiddleware');
-const isVerified = require('../middleware/roleMiddleware');
+const authenticate = require('../middleware/authMiddleware'); // Default import
+const { isAdmin, isVerified } = require('../middleware/roleMiddleware'); // Named imports
+const transactionController = require('../controllers/transactionController'); // Controller import
 
-router.post('/', authenticateUser, isVerified, transactionController.createTransaction);
-router.get('/', authenticateUser, transactionController.getTransactions);
-router.patch('/:id', authenticateUser, isVerified, transactionController.updateStatus);
+router.post(
+  '/',
+  authenticate,
+  isVerified,
+  transactionController.createTransaction // Proper controller reference
+);
+
+router.get(
+  '/',
+  authenticate,
+  isVerified,
+  transactionController.getTransactions
+);
+
+router.get(
+  '/:id',
+  authenticate,
+  isVerified,
+  transactionController.getTransactionById
+);
+
 
 module.exports = router;

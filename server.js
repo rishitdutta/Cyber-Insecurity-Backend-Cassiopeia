@@ -13,9 +13,9 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
-// app.use('/api/assets', require('./routes/assetRoutes'));
-// app.use('/api/transactions', require('./routes/transactionRoutes'));
-// app.use('/api/investments', require('./routes/investmentRoutes'));
+app.use('/api/assets', require('./routes/assetRoutes'));
+app.use('/api/transactions', require('./routes/transactionRoutes'));
+app.use('/api/investments', require('./routes/investmentRoutes'));
 // app.use('/api/loans', require('./routes/loanRoutes'));
 // app.use('/api/security', require('./routes/securityRoutes'));
 

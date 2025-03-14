@@ -2,44 +2,105 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { logSecurityEvent } = require('../utils/securityLogger');
 
-exports.createTransaction = async (req, res) => {
+async function createTransaction(req, res) {
+  const { receiverId, amount, type } = req.body;
+  const senderId = req.user.id;
+
+  // Validation
+  if (!receiverId || !amount || !type) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+  if (receiverId === senderId) {
+    return res.status(400).json({ error: "Cannot transact with yourself" });
+  }
+  if (amount <= 0) {
+    return res.status(400).json({ error: "Amount must be positive" });
+  }
+  if (!['CREDIT', 'DEBIT'].includes(type)) {
+    return res.status(400).json({ error: "Invalid transaction type" });
+  }
+
   try {
-    const { receiverId, amount, type } = req.body;
-    
-    // Check sender balance
-    const senderAsset = await prisma.asset.findFirst({
-      where: { userId: req.user.id, type: 'USD' }
+    const receiver = await prisma.user.findUnique({
+      where: { id: receiverId }
     });
-    
-    if (senderAsset.balance < amount) {
-      return res.status(400).json({ error: "Insufficient balance" });
+    if (!receiver) return res.status(404).json({ error: "Receiver not found" });
+
+    const transaction = await prisma.transaction.create({
+      data: { senderId, receiverId, amount, type, status: 'PENDING' }
+    });
+
+    await logSecurityEvent(
+      senderId,
+      "ASSET_TRANSFER",
+      { transactionId: transaction.id },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    res.status(201).json(transaction);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+async function getTransactions(req, res) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { role: true }
+    });
+
+    const transactions = user.role === 'ADMIN'
+      ? await prisma.transaction.findMany()
+      : await prisma.transaction.findMany({
+          where: {
+            OR: [
+              { senderId: req.user.id },
+              { receiverId: req.user.id }
+            ]
+          }
+        });
+
+    res.json(transactions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+async function getTransactionById(req, res) {
+  try {
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: Number(req.params.id) }
+    });
+    if (!transaction) return res.status(404).json({ error: "Transaction not found" });
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { role: true }
+    });
+
+    if (
+      user.role !== 'ADMIN' &&
+      transaction.senderId !== req.user.id &&
+      transaction.receiverId !== req.user.id
+    ) {
+      return res.status(403).json({ error: "Unauthorized access" });
     }
 
-    const transaction = await prisma.$transaction([
-      prisma.asset.update({
-        where: { id: senderAsset.id },
-        data: { balance: { decrement: amount } }
-      }),
-      prisma.asset.update({
-        where: { userId: receiverId, type: 'USD' },
-        data: { balance: { increment: amount } }
-      }),
-      prisma.transaction.create({
-        data: {
-          senderId: req.user.id,
-          receiverId,
-          amount,
-          type,
-          status: 'COMPLETED'
-        }
-      })
-    ]);
-
-    logSecurityEvent(req.user.id, "TRANSACTION_CREATED");
-    res.status(201).json(transaction[2]);
+    res.json(transaction);
   } catch (error) {
-    res.status(400).json({ error: "Transaction failed" });
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
   }
-};
+}
 
-// Add more functions (getTransactions, updateStatus, etc.)
+
+module.exports = {
+  createTransaction,
+  getTransactions,
+  getTransactionById,
+  
+};

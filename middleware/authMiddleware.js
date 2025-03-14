@@ -1,16 +1,24 @@
+// authMiddleware.js
+const { logSecurityEvent } = require('../utils/securityLogger'); // Add this at the top
+const { verifyToken } = require('./jwtUtils'); // Ensure you have this
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
 const authenticate = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
     await logSecurityEvent(
       null,
-      "UNAUTHENTICATED_ACCESS",
-      { path: req.path },
+      "SUSPICIOUS_ACTIVITY",
+      { 
+        path: req.path,
+        subType: "UNAUTHENTICATED_ACCESS" 
+      },
       req.ip,
       req.headers['user-agent']
     );
     return res.status(401).json({ error: "Authentication required" });
   }
-
   try {
     const decoded = verifyToken(token);
     
