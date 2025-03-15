@@ -1,7 +1,7 @@
-// utils/securityLogger.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Valid security events
 const validEvents = new Set([
   'ACCOUNT_VERIFICATION',
   'FAILED_LOGIN_ATTEMPT',
@@ -19,52 +19,72 @@ const validEvents = new Set([
   'NULL',
 ]);
 
-const logSecurityEvent = async (userId, eventType, details = {}, ipAddress = null, userAgent = null) => {
+// Event type mapping for fallback
+const eventMap = {
+  'UNAUTHENTICATED_ACCESS': 'SUSPICIOUS_ACTIVITY',
+  'EXPIRED_TOKEN_ATTEMPT': 'FAILED_LOGIN_ATTEMPT',
+  'INVALID_TOKEN_ATTEMPT': 'FAILED_LOGIN_ATTEMPT',
+};
+
+/**
+ * Logs a security event to the database.
+ * @param {number} userId - The ID of the user associated with the event.
+ * @param {string} eventType - The type of security event.
+ * @param {object} details - Additional details about the event.
+ * @param {string} ipAddress - The IP address of the user.
+ * @param {string} userAgent - The user agent of the client.
+ */
+const logSecurityEvent = async (userId, eventType, details = {}, ipAddress = 'unknown', userAgent = 'unknown') => {
   let mappedEvent;
 
   try {
-    // Event type mapping
-    const eventMap = {
-      'UNAUTHENTICATED_ACCESS': 'SUSPICIOUS_ACTIVITY',
-      'EXPIRED_TOKEN_ATTEMPT': 'FAILED_LOGIN_ATTEMPT',
-      'INVALID_TOKEN_ATTEMPT': 'FAILED_LOGIN_ATTEMPT'
-    };
-
+    // Map the event type to a valid event
     mappedEvent = eventMap[eventType] || eventType;
 
+    // Validate the event type
     if (!validEvents.has(mappedEvent)) {
-      throw new Error(`Invalid event type: ${eventType}`);
+      console.warn(`Invalid event type: ${eventType}. Defaulting to "NULL".`);
+      mappedEvent = 'NULL';
     }
 
-    // Prepare the data object
+    // Prepare the data object for Prisma
     const data = {
       eventType: mappedEvent,
       details: {
         ...details,
-        originalEventType: eventType
+        originalEventType: eventType, // Include the original event type for reference
       },
       ipAddress,
       userAgent,
     };
 
-    // Conditionally add user connection if userId is provided
+    // Connect the event to the user if userId is provided
     if (userId) {
       data.user = {
-        connect: { id: userId }
+        connect: { id: userId },
       };
     }
 
+    // Log the event to the database
     await prisma.securityLog.create({
-      data
+      data,
     });
+
+    console.log(`Security event logged: ${mappedEvent}`);
   } catch (error) {
-    console.error('Security log failed:', error.message);
+    console.error('Failed to log security event:', error.message);
+
+    // Fallback logging
     console.log('Fallback Log:', {
-      event: mappedEvent || eventType, // Use mappedEvent if defined, otherwise fallback to eventType
+      event: mappedEvent || eventType,
+      userId,
       details,
-      ip: ipAddress,
-      agent: userAgent
+      ipAddress,
+      userAgent,
     });
+  } finally {
+    // Disconnect the Prisma client to avoid connection leaks
+    await prisma.$disconnect();
   }
 };
 

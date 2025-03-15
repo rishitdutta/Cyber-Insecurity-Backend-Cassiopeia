@@ -17,8 +17,4 @@ router.post('/forgot-password', authController.requestPasswordReset);
 router.post('/reset-password', authController.otpLimiter, authController.resetPassword);
 
 
-
-
-// router.post('/user/investment-verif', investmentController.createAsset)
-
 module.exports = router;

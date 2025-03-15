@@ -5,7 +5,14 @@ const authenticate = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
-router.post('/user/investment', investmentController.Investment)
-router.post('/user/investment-verify', investmentController.verifyInvestmentOtp)
+/**
+ * @route POST /create
+ * @description Create new investment
+ * @access Private
+ * @body { amount: number, type: string, accountNumber: string }
+ */
+router.post('/create', investmentController.createInvestment);
+
+router.get('/', investmentController.getInvestments);
 
 module.exports = router;
