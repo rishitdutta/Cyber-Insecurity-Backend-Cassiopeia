@@ -3,7 +3,6 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const authenticate = require('../middleware/authMiddleware');
 
-const investmentController = require('../controllers/investmentController');
 
 
 // Authentication routes
@@ -19,8 +18,7 @@ router.post('/reset-password', authController.otpLimiter, authController.resetPa
 
 
 
-router.post('/user/investment', investmentController.Investment)
-router.post('/user/investment-verify', investmentController.verifyInvestmentOtp)
+
 // router.post('/user/investment-verif', investmentController.createAsset)
 
 module.exports = router;

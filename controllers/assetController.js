@@ -1,40 +1,9 @@
-// controllers/assetController.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 const assetController = {
-  // Get assets for the logged-in user
-  getMyAssets: async (req, res) => {
-    try {
-      const assets = await prisma.asset.findMany({
-        where: { userId: req.user.id },
-        orderBy: { createdAt: 'desc' }
-      });
-      
-      // Calculate total balance for each currency
-      const totals = {};
-      assets.forEach(asset => {
-        if (!totals[asset.currency]) {
-          totals[asset.currency] = 0;
-        }
-        totals[asset.currency] += asset.balance;
-      });
-      
-      res.status(200).json({
-        assets,
-        summary: {
-          totalAssets: assets.length,
-          balances: totals
-        }
-      });
-    } catch (error) {
-      console.error('Error fetching user assets:', error);
-      res.status(500).json({ error: 'Failed to fetch assets' });
-    }
-  },
-
-  // Get all assets (admin only)
-  getAllAssets: async (req, res) => {
+   // Get all assets (admin only)
+   getAllAssets: async (req, res) => {
     try {
       const { page = 1, limit = 10, userId, type, currency, sortBy = 'createdAt', order = 'desc' } = req.query;
       const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -165,6 +134,35 @@ const assetController = {
       res.status(500).json({ error: 'Failed to fetch asset details' });
     }
   },
+  // Get assets for the logged-in user
+  getMyAssets: async (req, res) => {
+    try {
+      const assets = await prisma.asset.findMany({
+        where: { userId: req.user.id },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      // Calculate total balance for each currency
+      const totals = {};
+      assets.forEach(asset => {
+        if (!totals[asset.currency]) {
+          totals[asset.currency] = 0;
+        }
+        totals[asset.currency] += asset.balance;
+      });
+      
+      res.status(200).json({
+        assets,
+        summary: {
+          totalAssets: assets.length,
+          balances: totals
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching user assets:', error);
+      res.status(500).json({ error: 'Failed to fetch assets' });
+    }
+  },
 
   // Create new asset
   createAsset: async (req, res) => {
@@ -174,7 +172,23 @@ const assetController = {
       if (!type) {
         return res.status(400).json({ error: 'Asset type is required' });
       }
-      
+
+      // Check if the user has sufficient balance
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id }
+      });
+
+      if (user.balance < balance) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
+      // Deduct the balance from the user's balance
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { balance: user.balance - balance }
+      });
+
+      // Create the asset
       const newAsset = await prisma.asset.create({
         data: {
           userId: req.user.id,
@@ -224,7 +238,26 @@ const assetController = {
       if (!existingAsset) {
         return res.status(404).json({ error: 'Asset not found or you do not have permission to update it' });
       }
-      
+
+      // Calculate the difference in balance
+      const balanceDifference = balance - existingAsset.balance;
+
+      // Check if the user has sufficient balance
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id }
+      });
+
+      if (user.balance < balanceDifference) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
+      // Update the user's balance
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { balance: user.balance - balanceDifference }
+      });
+
+      // Update the asset
       const updatedAsset = await prisma.asset.update({
         where: { id: parseInt(id) },
         data: {
@@ -279,7 +312,17 @@ const assetController = {
       if (!assetToDelete) {
         return res.status(404).json({ error: 'Asset not found' });
       }
-      
+
+      // Return the asset's balance to the user's balance
+      const user = await prisma.user.findUnique({
+        where: { id: assetToDelete.userId }
+      });
+
+      await prisma.user.update({
+        where: { id: assetToDelete.userId },
+        data: { balance: user.balance + assetToDelete.balance }
+      });
+
       // Delete the asset
       await prisma.asset.delete({
         where: { id: parseInt(id) }

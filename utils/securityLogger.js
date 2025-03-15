@@ -10,10 +10,18 @@ const validEvents = new Set([
   'SUSPICIOUS_ACTIVITY',
   'PROFILE_UPDATE',
   'ASSET_TRANSFER',
-  'LOAN_APPLICATION'
+  'LOAN_APPLICATION',
+  'SIGNUP_INITIATED',
+  'FAILED_OTP_VERIFICATION',
+  'LOGIN_OTP_SENT',
+  'FAILED_LOGIN_OTP',
+  'SUCCESSFUL_LOGIN',
+  'NULL',
 ]);
 
 const logSecurityEvent = async (userId, eventType, details = {}, ipAddress = null, userAgent = null) => {
+  let mappedEvent;
+
   try {
     // Event type mapping
     const eventMap = {
@@ -22,33 +30,37 @@ const logSecurityEvent = async (userId, eventType, details = {}, ipAddress = nul
       'INVALID_TOKEN_ATTEMPT': 'FAILED_LOGIN_ATTEMPT'
     };
 
-    const mappedEvent = eventMap[eventType] || eventType;
+    mappedEvent = eventMap[eventType] || eventType;
 
     if (!validEvents.has(mappedEvent)) {
       throw new Error(`Invalid event type: ${eventType}`);
     }
 
-    // System user connection (ID 0 must exist)
-    const userConnection = {
-      connect: { id: userId ? userId : 0 }
+    // Prepare the data object
+    const data = {
+      eventType: mappedEvent,
+      details: {
+        ...details,
+        originalEventType: eventType
+      },
+      ipAddress,
+      userAgent,
     };
 
+    // Conditionally add user connection if userId is provided
+    if (userId) {
+      data.user = {
+        connect: { id: userId }
+      };
+    }
+
     await prisma.securityLog.create({
-      data: {
-        eventType: mappedEvent,
-        details: {
-          ...details,
-          originalEventType: eventType
-        },
-        ipAddress,
-        userAgent,
-        user: userConnection
-      }
+      data
     });
   } catch (error) {
     console.error('Security log failed:', error.message);
     console.log('Fallback Log:', {
-      event: mappedEvent,
+      event: mappedEvent || eventType, // Use mappedEvent if defined, otherwise fallback to eventType
       details,
       ip: ipAddress,
       agent: userAgent

@@ -3,40 +3,83 @@ const prisma = new PrismaClient();
 const { logSecurityEvent } = require('../utils/securityLogger');
 
 async function createTransaction(req, res) {
-  const { receiverId, amount, type } = req.body;
-  const senderId = req.user.id;
+  const { senderAccountNumber, receiverAccountNumber, amount } = req.body;
 
   // Validation
-  if (!receiverId || !amount || !type) {
+  if (!senderAccountNumber || !receiverAccountNumber || !amount) {
     return res.status(400).json({ error: "Missing required fields" });
   }
-  if (receiverId === senderId) {
+  if (senderAccountNumber === receiverAccountNumber) {
     return res.status(400).json({ error: "Cannot transact with yourself" });
   }
   if (amount <= 0) {
     return res.status(400).json({ error: "Amount must be positive" });
   }
-  if (!['CREDIT', 'DEBIT'].includes(type)) {
-    return res.status(400).json({ error: "Invalid transaction type" });
-  }
 
   try {
-    const receiver = await prisma.user.findUnique({
-      where: { id: receiverId }
+    // Find sender account and user
+    const senderAccount = await prisma.account.findUnique({
+      where: { accountNumber: senderAccountNumber },
+      include: { user: true } // Include the user associated with the account
     });
-    if (!receiver) return res.status(404).json({ error: "Receiver not found" });
 
+    if (!senderAccount) {
+      return res.status(404).json({ error: "Sender account not found" });
+    }
+
+    // Find receiver account and user
+    const receiverAccount = await prisma.account.findUnique({
+      where: { accountNumber: receiverAccountNumber },
+      include: { user: true } // Include the user associated with the account
+    });
+
+    if (!receiverAccount) {
+      return res.status(404).json({ error: "Receiver account not found" });
+    }
+
+    // Check if sender has sufficient balance
+    if (senderAccount.balance < amount) {
+      return res.status(400).json({ error: "Insufficient balance" });
+    }
+
+    // Deduct amount from sender's account balance
+    await prisma.account.update({
+      where: { id: senderAccount.id },
+      data: { balance: senderAccount.balance - amount }
+    });
+
+    // Add amount to receiver's account balance
+    await prisma.account.update({
+      where: { id: receiverAccount.id },
+      data: { balance: receiverAccount.balance + amount }
+    });
+
+    // Create the transaction
     const transaction = await prisma.transaction.create({
-      data: { senderId, receiverId, amount, type, status: 'PENDING' }
+      data: {
+        senderId: senderAccount.userId,
+        receiverId: receiverAccount.userId,
+        amount,
+        status: 'COMPLETED'
+      }
     });
 
-    await logSecurityEvent(
-      senderId,
-      "ASSET_TRANSFER",
-      { transactionId: transaction.id },
-      req.ip,
-      req.headers['user-agent']
-    );
+    // Log the transaction for the sender
+    await prisma.securityLog.create({
+      data: {
+        userId: senderAccount.userId,
+        eventType: "ASSET_TRANSFER",
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        details: {
+          action: "TRANSACTION_CREATED",
+          transactionId: transaction.id,
+          amount,
+          senderAccountNumber,
+          receiverAccountNumber
+        }
+      }
+    });
 
     res.status(201).json(transaction);
   } catch (error) {
@@ -53,17 +96,69 @@ async function getTransactions(req, res) {
     });
 
     const transactions = user.role === 'ADMIN'
-      ? await prisma.transaction.findMany()
+      ? await prisma.transaction.findMany({
+          include: {
+            sender: {
+              select: {
+                accounts: {
+                  select: {
+                    accountNumber: true
+                  }
+                }
+              }
+            },
+            receiver: {
+              select: {
+                accounts: {
+                  select: {
+                    accountNumber: true
+                  }
+                }
+              }
+            }
+          }
+        })
       : await prisma.transaction.findMany({
           where: {
             OR: [
               { senderId: req.user.id },
               { receiverId: req.user.id }
             ]
+          },
+          include: {
+            sender: {
+              select: {
+                accounts: {
+                  select: {
+                    accountNumber: true
+                  }
+                }
+              }
+            },
+            receiver: {
+              select: {
+                accounts: {
+                  select: {
+                    accountNumber: true
+                  }
+                }
+              }
+            }
           }
         });
 
-    res.json(transactions);
+    // Map transactions to include account numbers and dynamic type
+    const formattedTransactions = transactions.map(transaction => ({
+      id: transaction.id,
+      senderAccountNumber: transaction.sender.accounts[0]?.accountNumber,
+      receiverAccountNumber: transaction.receiver.accounts[0]?.accountNumber,
+      amount: transaction.amount,
+      type: transaction.senderId === req.user.id ? 'DEBIT' : 'CREDIT', // Dynamic type
+      status: transaction.status,
+      createdAt: transaction.createdAt
+    }));
+
+    res.json(formattedTransactions);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });

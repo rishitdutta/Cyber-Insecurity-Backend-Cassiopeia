@@ -16,6 +16,6 @@ router.put('/:id', isVerified, assetController.updateAsset);
 // Admin-only routes
 router.get('/', isAdmin, assetController.getAllAssets); // All users' assets - admin only
 router.get('/:id', isAdmin, assetController.getAssetById); // Get any asset by ID - admin only
-router.delete('/:id', isAdmin, assetController.deleteAsset); // Asset deletion - admin only
+router.delete('/:id', assetController.deleteAsset); // Asset deletion - admin only
 
 module.exports = router;

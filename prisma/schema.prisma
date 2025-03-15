@@ -29,7 +29,7 @@ model User {
   role        Role     @default(USER)
   phone       String?
   mfaEnabled  Boolean  @default(false)
-  mfaSecret   String?  // Add this line
+  mfaSecret   String?
   otp         String?
   otpExpiry   DateTime?
   isVerified  Boolean  @default(false)
@@ -42,9 +42,11 @@ model User {
   lastLoginAt         DateTime?
   passwordResetRequested Boolean  @default(false)
   passwordChangedAt   DateTime?
+  balance     Float    @default(500.0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   assets      Asset[]
+  accounts    Account[] // Add this line
   sentTransactions     Transaction[] @relation("SentTransactions")
   receivedTransactions Transaction[] @relation("ReceivedTransactions")
   investments Investment[]
@@ -64,11 +66,6 @@ model Asset {
   updatedAt   DateTime @updatedAt
 }
 
-enum TransactionType {
-  CREDIT
-  DEBIT
-}
-
 enum TransactionStatus {
   PENDING
   COMPLETED
@@ -82,7 +79,6 @@ model Transaction {
   receiverId  Int
   receiver    User              @relation("ReceivedTransactions", fields: [receiverId], references: [id])
   amount      Float
-  type        TransactionType
   status      TransactionStatus @default(PENDING)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -124,6 +120,21 @@ model Loan {
   updatedAt   DateTime    @updatedAt
 }
 
+model Account {
+  id            Int      @id @default(autoincrement())
+  accountNumber String   @unique
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  type          String   @default("SAVINGS")
+  balance       Float    @default(0.0)
+  currency      String   @default("USD")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([accountNumber]) // Add index for faster lookups
+}
+
 enum SecurityEventType {
   ACCOUNT_VERIFICATION
   FAILED_LOGIN_ATTEMPT
@@ -133,6 +144,11 @@ enum SecurityEventType {
   PROFILE_UPDATE
   ASSET_TRANSFER
   LOAN_APPLICATION
+  SIGNUP_INITIATED
+  FAILED_OTP_VERIFICATION
+  LOGIN_OTP_SENT
+  FAILED_LOGIN_OTP
+  SUCCESSFUL_LOGIN
   NULL
 }
 

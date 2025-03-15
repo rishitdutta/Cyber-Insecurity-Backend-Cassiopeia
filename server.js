@@ -16,6 +16,8 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/assets', require('./routes/assetRoutes'));
 app.use('/api/transactions', require('./routes/transactionRoutes'));
 app.use('/api/investments', require('./routes/investmentRoutes'));
+app.use('/api/accounts', require('./routes/accountRoutes'));
+app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 // app.use('/api/loans', require('./routes/loanRoutes'));
 // app.use('/api/security', require('./routes/securityRoutes'));
 
