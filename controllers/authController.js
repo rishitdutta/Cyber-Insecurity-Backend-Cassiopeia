@@ -4,6 +4,7 @@ const { sendOTP } = require('../services/emailService');
 const { hashPassword, comparePassword, generateToken } = require('../utils/auth');
 const { logSecurityEvent } = require('../utils/securityLogger');
 const { body, validationResult } = require('express-validator');
+const jwt = require('jsonwebtoken');
 
 // Input validation middleware
 exports.validateSignupInput = [
@@ -359,5 +360,60 @@ exports.resetPassword = async (req, res) => {
   } catch (error) {
     console.error('Password reset error:', error);
     res.status(500).json({ error: "Password reset failed" });
+  }
+};
+
+exports.verifyToken = async (req, res) => {
+  try {
+    // Extract token from headers
+    const token = req.headers.authorization?.split(' ')[1]; // Expects "Bearer <token>"
+    if (!token) {
+      return res.status(401).json({ error: "No token provided" });
+    }
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('Decoded token:', decoded);
+    console.log('User ID:', decoded.userId);
+
+    // Fetch user details from the database
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isVerified: true,
+        profileCompleted: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Log security event
+    await logSecurityEvent(
+      user.id,
+      "NULL", //TOKEN_VERIFIED
+      { method: "JWT" },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    // Return user details
+    res.status(200).json({ user });
+  } catch (error) {
+    console.error('Token verification error:', error);
+
+    // Handle specific JWT errors
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: "Token expired" });
+    }
+
+    res.status(500).json({ error: "Token verification failed" });
   }
 };
