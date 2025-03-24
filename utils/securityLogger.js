@@ -3,20 +3,52 @@ const prisma = new PrismaClient();
 
 // Valid security events
 const validEvents = new Set([
+  // Auth Events
+  'SIGNUP_INITIATED',
   'ACCOUNT_VERIFICATION',
   'FAILED_LOGIN_ATTEMPT',
-  'PASSWORD_RESET',
-  'MFA_ENABLED',
-  'SUSPICIOUS_ACTIVITY',
-  'PROFILE_UPDATE',
-  'ASSET_TRANSFER',
-  'LOAN_APPLICATION',
-  'SIGNUP_INITIATED',
-  'FAILED_OTP_VERIFICATION',
+  'SUCCESSFUL_LOGIN',
   'LOGIN_OTP_SENT',
   'FAILED_LOGIN_OTP',
-  'SUCCESSFUL_LOGIN',
-  'NULL',
+  'PASSWORD_RESET_REQUESTED',
+  'PASSWORD_RESET_COMPLETED',
+  'PROFILE_COMPLETED',
+
+  // User Events
+  'PROFILE_UPDATE',
+  'MFA_ENABLED',
+  'MFA_DISABLED',
+
+  // Asset Events
+  'ASSET_CREATED',
+  'ASSET_UPDATED',
+  'ASSET_DELETED',
+  'ASSET_TRANSFER',
+
+  // Account Events
+  'ACCOUNT_CREATED',
+  'ACCOUNT_UPDATED',
+  'ACCOUNT_DELETED',
+
+  // Transaction Events
+  'TRANSACTION_INITIATED',
+  'TRANSACTION_COMPLETED',
+  'TRANSACTION_FAILED',
+
+  // Loan Events
+  'LOAN_APPLICATION',
+  'LOAN_APPROVED',
+  'LOAN_REJECTED',
+  'LOAN_REPAID',
+
+  // Investment Events
+  'INVESTMENT_CREATED',
+  'INVESTMENT_UPDATED',
+  'INVESTMENT_CLOSED',
+
+  // Other Events
+  'SUSPICIOUS_ACTIVITY',
+  'NULL'
 ]);
 
 // Event type mapping for fallback

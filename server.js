@@ -19,7 +19,7 @@ app.use('/api/investments', require('./routes/investmentRoutes'));
 app.use('/api/accounts', require('./routes/accountRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/loans', require('./routes/loanRoutes'));
-// app.use('/api/security', require('./routes/securityRoutes'));
+app.use('/api/security-logs', require('./routes/securitylogRoutes'));
 
 // Error handling
 app.use((err, req, res, next) => {
