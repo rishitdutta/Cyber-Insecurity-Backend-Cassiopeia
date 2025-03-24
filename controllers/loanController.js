@@ -153,6 +153,57 @@ exports.getUserLoans = async (req, res) => {
 };
 
 // Admin Operations
+exports.getAllLoans = async (req, res) => {
+  const { status } = req.query;
+  const adminId = req.user.id;
+
+  try {
+    const whereClause = {};
+    if (status && Object.values(LoanStatus).includes(status)) {
+      whereClause.status = status;
+    }
+
+    const loans = await prisma.loan.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    // Log admin access
+    await logSecurityEvent(
+      adminId,
+      "ADMIN_ACTION",
+      { action: "VIEW_ALL_LOANS", count: loans.length },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: loans.map(loan => ({
+        ...loan,
+        repaymentAmount: loan.amount + (loan.amount * loan.interest / 100)
+      })),
+      count: loans.length
+    });
+
+  } catch (error) {
+    console.error("[Admin] Loan fetch error:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to retrieve loans" 
+    });
+  }
+};
+
 exports.processLoanApplication = async (req, res) => {
   const { loanId } = req.params;
   const { action, accountNumber, reason } = req.body;

@@ -26,5 +26,4 @@ router.get(
   transactionController.getTransactionById
 );
 
-
 module.exports = router;

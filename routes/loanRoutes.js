@@ -13,6 +13,7 @@ router.get('/my-loans', isVerified, loanController.getUserLoans);
 router.get('/:loanId', isVerified, loanController.getLoanDetails);
 
 // Admin routes
+router.get('/admin/all', isAdmin, loanController.getAllLoans);
 router.put('/:loanId/process', isAdmin, loanController.processLoanApplication);
 
 module.exports = router;

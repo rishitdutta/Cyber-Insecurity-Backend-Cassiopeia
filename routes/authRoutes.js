@@ -3,8 +3,6 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const authenticate = require('../middleware/authMiddleware');
 
-
-
 // Authentication routes
 router.post('/signup', authController.validateSignupInput, authController.initiateSignup);
 router.post('/verify', authController.otpLimiter, authController.verifySignup);
@@ -16,6 +14,5 @@ router.get('/verify-token', authController.verifyToken);
 // Password reset routes
 router.post('/forgot-password', authController.requestPasswordReset);
 router.post('/reset-password', authController.otpLimiter, authController.resetPassword);
-
 
 module.exports = router;
