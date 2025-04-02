@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const prisma = require('@prisma/client');
+const authenticate = require('./middleware/authMiddleware');
 
 dotenv.config();
 const app = express();
@@ -12,14 +13,14 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/assets', require('./routes/assetRoutes'));
-app.use('/api/transactions', require('./routes/transactionRoutes'));
-app.use('/api/investments', require('./routes/investmentRoutes'));
-app.use('/api/accounts', require('./routes/accountRoutes'));
-app.use('/api/dashboard', require('./routes/dashboardRoutes'));
-app.use('/api/loans', require('./routes/loanRoutes'));
-app.use('/api/security-logs', require('./routes/securitylogRoutes'));
+app.use('/api/users',authenticate , require('./routes/userRoutes'));
+app.use('/api/assets',authenticate , require('./routes/assetRoutes'));
+app.use('/api/transactions', authenticate ,require('./routes/transactionRoutes'));
+app.use('/api/investments', authenticate , require('./routes/investmentRoutes'));
+app.use('/api/accounts', authenticate , require('./routes/accountRoutes'));
+app.use('/api/dashboard', authenticate , require('./routes/dashboardRoutes'));
+app.use('/api/loans', authenticate , require('./routes/loanRoutes'));
+app.use('/api/security-logs', authenticate , require('./routes/securitylogRoutes'));
 
 // Error handling
 app.use((err, req, res, next) => {
