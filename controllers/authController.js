@@ -18,8 +18,16 @@ const rateLimit = require('express-rate-limit');
 
 exports.otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
-  message: { error: 'Too many attempts, please try again later' }
+  max: 5, // 5 OTP requests per window
+  message: { error: "Too many OTP requests. Try again later." },
+  keyGenerator: (req) => req.body.email || req.ip, // Limits OTP by user email first, then IP
+  handler: (req, res) => {
+    res.status(429).json({
+      error: "Too many OTP attempts. Try again in 15 minutes.",
+    });
+  },
+  standardHeaders: true, // Sends rate limit info in headers
+  legacyHeaders: false, // Disable X-RateLimit headers (not needed)
 });
 
 // Step 1: Initial Signup
@@ -152,49 +160,61 @@ exports.initiateLogin = async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
     if (!user.isVerified) return res.status(401).json({ error: "Account not verified" });
 
+    if (user.failedLoginAttempts >= 5 && user.lastLoginAt && new Date() - user.lastLoginAt < 30 * 60 * 1000) {
+      return res.status(403).json({ error: "Account locked due to multiple failed login attempts. Try again after 30 minutes." });
+    }
+
     const isValid = await comparePassword(password, user.password);
+
     if (!isValid) {
+      await prisma.user.update({
+        where: { email },
+        data: { failedLoginAttempts: { increment: 1 }, lastLoginAt: new Date() },
+      });
+
       await logSecurityEvent(
         user.id,
         "FAILED_LOGIN_ATTEMPT",
         {
           email,
-          attemptCount: user.failedLoginAttempts + 1
+          attemptCount: user.failedLoginAttempts + 1,
         },
         req.ip,
-        req.headers['user-agent']
+        req.headers["user-agent"]
       );
+
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Password is correct, now send OTP for 2FA
+    await prisma.user.update({
+      where: { email },
+      data: { failedLoginAttempts: 0 },
+    });
+
     const otpPlaintext = await sendOTP(email);
     const otpHash = await hashPassword(otpPlaintext);
 
-    // Store hashed OTP in database
     await prisma.user.update({
       where: { email },
       data: {
         otp: otpHash,
         otpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-        loginAttempts: { increment: 1 }
-      }
+        loginAttempts: { increment: 1 },
+      },
     });
 
-    await logSecurityEvent(
-      user.id,
-      "LOGIN_OTP_SENT",
-      { method: "EMAIL" },
-      req.ip,
-      req.headers['user-agent']
-    );
+    await logSecurityEvent(user.id, "LOGIN_OTP_SENT", { method: "EMAIL" }, req.ip, req.headers["user-agent"]);
+
     res.status(200).json({
       message: "OTP sent to your email for verification",
-      userId: user.id // Send userId for the next step
+      userId: user.id,
     });
   } catch (error) {
-    console.error('Login initiation error:', error);
-    res.status(500).json({ error: "Login initiation failed", message: process.env.NODE_ENV === 'development' ? error.message : undefined });
+    console.error("Login initiation error:", error);
+    res.status(500).json({
+      error: "Login initiation failed",
+      message: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
@@ -274,6 +294,11 @@ exports.requestPasswordReset = async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // Check if too many failed attempts locked the account
+    if (user.failedLoginAttempts >= 5) {
+      return res.status(429).json({ error: "Too many failed attempts. Try again later." });
+    }
+
     const otpPlaintext = await sendOTP(email);
     const otpHash = await hashPassword(otpPlaintext);
 
@@ -282,7 +307,8 @@ exports.requestPasswordReset = async (req, res) => {
       data: {
         otp: otpHash,
         otpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-        passwordResetRequested: true
+        passwordResetRequested: true,
+        failedLoginAttempts: 0, // Reset failed attempts on success
       }
     });
 
@@ -291,15 +317,23 @@ exports.requestPasswordReset = async (req, res) => {
       "PASSWORD_RESET",
       { email },
       req.ip,
-      req.headers['user-agent']
+      req.headers["user-agent"]
     );
+
     res.status(200).json({ message: "Password reset OTP sent" });
   } catch (error) {
-    console.error('Password reset request error:', error);
+    console.error("Password reset request error:", error);
     res.status(500).json({ error: "Password reset request failed" });
   }
 };
 
+// Apply rate limiting on password reset requests
+exports.passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // Only 3 reset attempts per user
+  keyGenerator: (req) => req.body.email || req.ip,
+  message: { error: "Too many password reset requests. Try again later." },
+});
 // Complete password reset
 exports.resetPassword = async (req, res) => {
   try {

@@ -11,6 +11,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use(cors({
+  origin: process.env.FRONTEND_URL,  
+  credentials: true  // Allow cookies & authentication headers
+}));  
+
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users',authenticate , require('./routes/userRoutes'));

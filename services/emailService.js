@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+import crypto from "crypto";
 
 // Create a reusable transporter
 const transporter = nodemailer.createTransport({
@@ -17,7 +18,9 @@ transporter.verify()
   .catch(err => console.error('Email service connection error:', err));
 
 // Generate a 6-digit OTP
-const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+const generateOTP = (length = 6) => {
+  return Array.from({ length }, () => crypto.randomInt(0, 10)).join("");
+};
 
 // Send OTP with better error handling and logging
 const sendOTP = async (email) => {
